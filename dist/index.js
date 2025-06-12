@@ -20,6 +20,7 @@ const fs_1 = __importDefault(require("fs"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
+const trade_js_1 = require("./trade.js");
 const handel_js_1 = require("./handel.js");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 80; // Changed to port 80
@@ -114,6 +115,26 @@ app.post("/api/webhook", (req, res) => __awaiter(void 0, void 0, void 0, functio
             error: "Internal server error",
             message: error.message,
             timestamp: new Date().toISOString(),
+        });
+    }
+}));
+app.get("/api/account", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { omitZeroBalances } = req.query;
+        const accountInfo = yield (0, trade_js_1.getAccountInfo)(omitZeroBalances === "true", 5000 // recvWindow
+        );
+        res.status(200).json({
+            success: true,
+            account: accountInfo,
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (error) {
+        console.error("Error getting account info:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to get account info",
+            message: error.message,
         });
     }
 }));

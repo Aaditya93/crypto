@@ -1,0 +1,8 @@
+{
+  "id": "7da27e1b-2ce5-4d2f-8dcb-12c560e11150",
+  "method": "account.status",
+  "params": {
+    "timestamp": 1749735750243,
+    "signature": "043a48bf129d5c716e8cac7083d6bae77bb26e1a69903f7ba5bd04bbe27fea08"
+  }
+}

@@ -1,0 +1,10 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master
+      - main
+jobs:
+  deploy_lambda:
+    runs-on: ubuntu-latest

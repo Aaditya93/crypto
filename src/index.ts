@@ -6,6 +6,7 @@ import fs from "fs";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import { getAccountInfo } from "./trade.js";
 import {
   handleTradingAlert,
   getCurrentPositions,
@@ -116,6 +117,29 @@ app.post("/api/webhook", async (req, res) => {
       error: "Internal server error",
       message: error.message,
       timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+app.get("/api/account", async (req, res) => {
+  try {
+    const { omitZeroBalances } = req.query;
+    const accountInfo = await getAccountInfo(
+      omitZeroBalances === "true",
+      5000 // recvWindow
+    );
+
+    res.status(200).json({
+      success: true,
+      account: accountInfo,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error getting account info:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get account info",
+      message: error.message,
     });
   }
 });

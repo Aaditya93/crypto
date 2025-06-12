@@ -1,7 +1,8 @@
 import dotenv from "dotenv";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
-import { get } from "http";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 const apiKey = process.env.BINANCE_API_KEY;
@@ -139,6 +140,7 @@ async function getAccountInfo(
     );
 
     const result = await response.json();
+
     console.log("Account info response:", result);
 
     return result;
@@ -409,7 +411,6 @@ async function cancelAllOpenOrdersForSymbol(
   return await cancelAllOpenOrders(symbol, recvWindow);
 }
 
-// Export functions
 export {
   placeOrder,
   getAccountInfo,
