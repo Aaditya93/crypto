@@ -227,7 +227,7 @@ function handleOpenFuturesPosition(alert) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d, _e, _f, _g;
         try {
-            const { symbol, side, leverage = 50 } = alert;
+            const { symbol, side, leverage = 100 } = alert;
             // Double-check symbol conversion for safety
             const conversionCheck = convertTradingViewToBinance(symbol);
             if (conversionCheck.error) {

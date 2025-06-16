@@ -311,7 +311,7 @@ async function handleOpenFuturesPosition(
   alert: FuturesTradingAlert
 ): Promise<any> {
   try {
-    const { symbol, side, leverage = 50 } = alert;
+    const { symbol, side, leverage = 100 } = alert;
 
     // Double-check symbol conversion for safety
     const conversionCheck = convertTradingViewToBinance(symbol);

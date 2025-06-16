@@ -26,7 +26,6 @@ exports.changeFuturesLeverage = changeFuturesLeverage;
 exports.cancelFuturesOrder = cancelFuturesOrder;
 exports.placeRiskManagedOrder = placeRiskManagedOrder;
 exports.placeSmartRiskOrder = placeSmartRiskOrder;
-exports.placeBatchRiskOrders = placeBatchRiskOrders;
 exports.getCurrentPrice = getCurrentPrice;
 exports.getAccountCapital = getAccountCapital;
 // Function to create signature for futures API
@@ -366,16 +365,51 @@ function getAccountCapital() {
         }
     });
 }
-// Main function to calculate position size and place order with risk management
+// Add helper function to format quantity with proper precision
+function formatQuantityWithPrecision(symbol_1, quantity_1) {
+    return __awaiter(this, arguments, void 0, function* (symbol, quantity, isCoinM = false) {
+        try {
+            const minReqs = yield getMinOrderRequirements(symbol, isCoinM);
+            // Round to step size first
+            const stepSize = minReqs.stepSize;
+            let adjustedQty = Math.floor(quantity / stepSize) * stepSize;
+            // Ensure minimum quantity
+            adjustedQty = Math.max(adjustedQty, minReqs.minQty);
+            // Format with appropriate decimal places based on step size
+            let decimals = 0;
+            let tempStep = stepSize;
+            while (tempStep < 1 && decimals < 8) {
+                tempStep *= 10;
+                decimals++;
+            }
+            return adjustedQty.toFixed(decimals).replace(/\.?0+$/, "");
+        }
+        catch (error) {
+            console.error(`Error formatting quantity for ${symbol}:`, error);
+            // Fallback to 3 decimal places
+            return quantity.toFixed(3).replace(/\.?0+$/, "");
+        }
+    });
+}
+// Main function to calculate position size and place order with risk management - FIXED
 function placeRiskManagedOrder(orderParams) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const { symbol, side, type = "MARKET", price, riskConfig, leverage = 1, } = orderParams;
             console.log(`🎯 Placing risk-managed order for ${symbol}...`);
-            // Detect contract type
-            const isCoinM = symbol.includes("USDM") ||
-                (symbol.includes("USD") && symbol.match(/\d{3}$/) !== null);
+            // Detect contract type using the converter
+            const isCoinM = symbol.includes("USD_") ||
+                symbol.endsWith("USD_PERP") ||
+                (symbol.includes("USD") &&
+                    !symbol.includes("USDT") &&
+                    !!symbol.match(/_\d{6}$/));
             console.log(`📊 Contract type: ${isCoinM ? "Coin-M" : "USDT-M"}`);
+            // Get minimum requirements first
+            const minReqs = yield getMinOrderRequirements(symbol, isCoinM);
+            console.log(`📋 Min requirements for ${symbol}:`, minReqs);
+            if (minReqs.status !== "TRADING") {
+                throw new Error(`Symbol ${symbol} is not available for trading (status: ${minReqs.status})`);
+            }
             // Get current price
             const currentPrice = price || (yield getCurrentPrice(symbol, isCoinM));
             console.log(`💰 Current price: ${currentPrice}`);
@@ -385,29 +419,42 @@ function placeRiskManagedOrder(orderParams) {
             if (capital <= 0) {
                 throw new Error("Insufficient account balance");
             }
-            // Risk Calculation (same as your Pine Script logic)
+            // Risk Calculation
             const riskCapital = capital * (riskConfig.riskPerTradePercent / 100);
             const stopDist = currentPrice * (riskConfig.stopLossPercent / 100);
-            const calculatedQty = riskCapital / stopDist;
+            let calculatedQty = riskCapital / stopDist;
             console.log(`📈 Risk calculations:`);
             console.log(`   Risk capital (${riskConfig.riskPerTradePercent}%): ${riskCapital.toFixed(2)}`);
             console.log(`   Stop distance (${riskConfig.stopLossPercent}%): ${stopDist.toFixed(6)}`);
-            console.log(`   Calculated quantity: ${calculatedQty.toFixed(6)}`);
-            // Apply minimum order size and precision
-            let quantity = calculatedQty;
-            if (riskConfig.minOrderSize && quantity < riskConfig.minOrderSize) {
-                quantity = riskConfig.minOrderSize;
-                console.log(`⚠️ Quantity adjusted to minimum: ${quantity}`);
+            console.log(`   Raw calculated quantity: ${calculatedQty.toFixed(8)}`);
+            // Apply minimum order size
+            if (riskConfig.minOrderSize && calculatedQty < riskConfig.minOrderSize) {
+                calculatedQty = riskConfig.minOrderSize;
+                console.log(`⚠️ Quantity adjusted to minimum: ${calculatedQty}`);
             }
-            // Round to 3 decimal places
-            quantity = parseFloat(quantity.toFixed(3));
+            // Ensure minimum notional value is met
+            const notionalValue = calculatedQty * currentPrice;
+            if (notionalValue < minReqs.minNotional) {
+                calculatedQty = minReqs.minNotional / currentPrice;
+                console.log(`⚠️ Quantity adjusted for min notional ($${minReqs.minNotional}): ${calculatedQty.toFixed(8)}`);
+            }
+            // Format quantity with proper precision - THIS IS THE KEY FIX
+            const formattedQuantity = yield formatQuantityWithPrecision(symbol, calculatedQty, isCoinM);
+            console.log(`✅ Final formatted quantity: ${formattedQuantity}`);
+            // Verify the formatted quantity meets requirements
+            const finalNotional = parseFloat(formattedQuantity) * currentPrice;
+            console.log(`💵 Final notional value: $${finalNotional.toFixed(2)}`);
+            if (finalNotional < minReqs.minNotional) {
+                throw new Error(`Order size too small. Minimum notional: $${minReqs.minNotional}, got: $${finalNotional.toFixed(2)}`);
+            }
             // Calculate stop loss price
             const stopLossPrice = side === "BUY"
                 ? currentPrice * (1 - riskConfig.stopLossPercent / 100)
                 : currentPrice * (1 + riskConfig.stopLossPercent / 100);
             console.log(`🛑 Stop loss price: ${stopLossPrice.toFixed(6)}`);
             // Set leverage if specified
-            if (leverage > 1) {
+            if (leverage > 1 && !isCoinM) {
+                // Only set leverage for USDT-M
                 try {
                     yield changeFuturesLeverage(symbol, leverage);
                     console.log(`⚡ Leverage set to ${leverage}x`);
@@ -416,8 +463,9 @@ function placeRiskManagedOrder(orderParams) {
                     console.warn(`Warning: Could not set leverage - ${leverageError}`);
                 }
             }
-            // Place main order
-            const mainOrderParams = Object.assign(Object.assign({ symbol: symbol, side: side, type: type, quantity: quantity.toString() }, (type === "LIMIT" && price ? { price: price.toString() } : {})), { newOrderRespType: "RESULT" });
+            // Place main order with properly formatted quantity
+            const mainOrderParams = Object.assign(Object.assign({ symbol: symbol, side: side, type: type, quantity: formattedQuantity }, (type === "LIMIT" && price ? { price: price.toString() } : {})), { newOrderRespType: "RESULT" });
+            console.log(`📤 Placing order with params:`, mainOrderParams);
             let mainOrderResult;
             if (isCoinM) {
                 mainOrderResult = yield placeCoinMFuturesOrder(mainOrderParams);
@@ -427,6 +475,7 @@ function placeRiskManagedOrder(orderParams) {
             }
             console.log(`✅ Main order placed:`, mainOrderResult);
             // Calculate risk metrics
+            const finalQuantity = parseFloat(formattedQuantity);
             const maxLoss = riskCapital;
             const riskRewardRatio = riskCapital / stopDist;
             return {
@@ -435,10 +484,12 @@ function placeRiskManagedOrder(orderParams) {
                 contractType: isCoinM ? "Coin-M" : "USDT-M",
                 orderDetails: {
                     side: side,
-                    quantity: quantity,
+                    quantity: finalQuantity,
+                    formattedQuantity: formattedQuantity,
                     price: currentPrice,
                     stopLossPrice: stopLossPrice,
                     leverage: leverage,
+                    notionalValue: finalQuantity * currentPrice,
                 },
                 riskMetrics: {
                     accountCapital: capital,
@@ -453,6 +504,7 @@ function placeRiskManagedOrder(orderParams) {
                     mainOrder: mainOrderResult,
                     stopLossOrder: null,
                 },
+                minRequirements: minReqs,
                 timestamp: new Date().toISOString(),
             };
         }
@@ -462,45 +514,39 @@ function placeRiskManagedOrder(orderParams) {
         }
     });
 }
-// Convenience function with default risk settings
+// Also update the placeSmartRiskOrder function to handle precision
 function placeSmartRiskOrder(symbol, side, customRisk) {
     return __awaiter(this, void 0, void 0, function* () {
         const defaultRisk = {
-            riskPerTradePercent: 1.0, // 1% of capital
-            stopLossPercent: 0.25, // 0.25% stop loss
+            riskPerTradePercent: 1.0,
+            stopLossPercent: 0.25,
             maxLeverage: 50,
             minOrderSize: 0.001,
         };
         const riskConfig = Object.assign(Object.assign({}, defaultRisk), customRisk);
-        return yield placeRiskManagedOrder({
-            symbol,
-            side,
-            type: "MARKET",
-            riskConfig,
-            leverage: riskConfig.maxLeverage,
-        });
-    });
-}
-// Function to place multiple risk-managed orders
-function placeBatchRiskOrders(orders) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const results = [];
-        for (const order of orders) {
-            try {
-                const result = yield placeSmartRiskOrder(order.symbol, order.side, order.riskConfig);
-                results.push(result);
-                // Add delay between orders to avoid rate limits
-                yield new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+            // Get minimum requirements to adjust default minOrderSize if needed
+            const isCoinM = symbol.includes("USD_") ||
+                symbol.endsWith("USD_PERP") ||
+                (symbol.includes("USD") && !symbol.includes("USDT"));
+            const minReqs = yield getMinOrderRequirements(symbol, isCoinM);
+            // Adjust minimum order size based on symbol requirements
+            if (minReqs.minQty > riskConfig.minOrderSize) {
+                riskConfig.minOrderSize = minReqs.minQty;
+                console.log(`📋 Adjusted min order size to ${riskConfig.minOrderSize} for ${symbol}`);
             }
-            catch (error) {
-                results.push({
-                    success: false,
-                    symbol: order.symbol,
-                    error: error instanceof Error ? error.message : String(error),
-                });
-            }
+            return yield placeRiskManagedOrder({
+                symbol,
+                side,
+                type: "MARKET",
+                riskConfig,
+                leverage: riskConfig.maxLeverage,
+            });
         }
-        return results;
+        catch (error) {
+            console.error(`❌ Error in smart risk order for ${symbol}:`, error);
+            throw error;
+        }
     });
 }
 // Function to get exchange info and find valid symbols
