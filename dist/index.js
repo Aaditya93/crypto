@@ -32,8 +32,8 @@ const path_1 = __importDefault(require("path"));
 const handel_js_1 = require("./handel.js");
 const futures_js_1 = require("./futures.js");
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 3000;
-const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+const PORT = process.env.PORT || 80;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 // Middleware
 app.use(express_1.default.json({ limit: "10mb" }));
 app.use(express_1.default.urlencoded({ extended: true, limit: "10mb" }));

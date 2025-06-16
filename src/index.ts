@@ -26,8 +26,8 @@ import {
 } from "./futures.js";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+const PORT = process.env.PORT || 80;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 
 // Middleware
 app.use(express.json({ limit: "10mb" }));
