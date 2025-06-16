@@ -9,236 +9,448 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.handleFuturesTradingAlert = handleFuturesTradingAlert;
+exports.closeFuturesPosition = closeFuturesPosition;
+exports.forceCloseAllPositions = forceCloseAllPositions;
+exports.getCurrentFuturesPositions = getCurrentFuturesPositions;
+exports.getFuturesPosition = getFuturesPosition;
+exports.syncFuturesPositions = syncFuturesPositions;
 exports.handleTradingAlert = handleTradingAlert;
-exports.getCurrentPositions = getCurrentPositions;
-exports.getPosition = getPosition;
-exports.closePosition = closePosition;
-exports.closeAllPositions = closeAllPositions;
-exports.syncPositions = syncPositions;
-const trade_js_1 = require("./trade.js");
-// Simple in-memory position tracking (consider using a database for production)
-const activePositions = new Map();
-// Handler function for TradingView alerts
-function handleTradingAlert(alertJson) {
+const futures_js_1 = require("./futures.js");
+// In-memory position tracking for futures
+const activeFuturesPositions = new Map();
+// Function to detect contract type
+function getContractType(symbol) {
+    if (symbol.includes("USDM") ||
+        (symbol.includes("USD") && symbol.match(/\d{3}$/))) {
+        return "COIN-M";
+    }
+    return "USDT-M";
+}
+// Main handler function for futures trading alerts
+function handleFuturesTradingAlert(alertJson) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            console.log("Received alert:", alertJson);
+            console.log("🚀 Received futures alert:", alertJson);
             // Parse the JSON alert
             const alert = JSON.parse(alertJson);
             // Validate required fields
-            if (!alert.symbol ||
-                !alert.side ||
-                !alert.type ||
-                !alert.quantity ||
-                !alert.trade) {
-                throw new Error("Invalid alert: missing required fields (symbol, side, type, quantity, trade)");
+            if (!alert.symbol || !alert.side || !alert.trade) {
+                throw new Error("Invalid alert: missing required fields (symbol, side, trade)");
             }
-            console.log(`Processing ${alert.trade} ${alert.type} order: ${alert.side} ${alert.quantity} ${alert.symbol}`);
+            // Auto-detect contract type
+            const contractType = getContractType(alert.symbol);
+            console.log(`📊 Processing ${contractType} ${alert.trade} order: ${alert.side} ${alert.symbol}`);
             // Route based on trade type
             if (alert.trade === "OPEN") {
-                return yield handleOpenPosition(alert);
+                return yield handleOpenFuturesPosition(alert);
             }
             else if (alert.trade === "CLOSE") {
-                return yield handleClosePosition(alert);
+                return yield handleCloseFuturesPosition(alert);
             }
             else {
                 throw new Error(`Invalid trade type: ${alert.trade}. Must be OPEN or CLOSE`);
             }
         }
         catch (error) {
-            console.error("Error handling trading alert:", error);
+            console.error("❌ Error handling futures trading alert:", error);
             throw error;
         }
     });
 }
-// Handle opening new positions
-function handleOpenPosition(alert) {
+// Handle opening new futures positions with risk management
+function handleOpenFuturesPosition(alert) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f, _g;
         try {
-            const { symbol, side, quantity, type } = alert;
-            const currentPosition = activePositions.get(symbol);
+            const { symbol, side, leverage = 50 } = alert;
+            const currentPosition = activeFuturesPositions.get(symbol);
             // If position already exists, close it first
             if (currentPosition) {
-                console.log(`Position already exists for ${symbol}. Closing existing position first.`);
-                // Cancel all open orders for this symbol
-                try {
-                    const cancelResult = yield (0, trade_js_1.cancelAllOpenOrdersForSymbol)(symbol);
-                    console.log(`Cancelled all open orders for ${symbol}:`, cancelResult);
-                }
-                catch (error) {
-                    console.log("Could not cancel open orders:", error);
-                }
-                // Close existing position
-                activePositions.delete(symbol);
-                console.log(`Closed existing ${currentPosition.side} position for ${symbol}`);
+                console.log(`⚠️ Position already exists for ${symbol}. Closing existing position first.`);
+                yield handleExistingFuturesPositionClose(symbol, currentPosition);
             }
-            // Place the new entry order
-            const orderResult = yield (0, trade_js_1.placeOrder)({
-                symbol: symbol,
-                side: side,
-                type: type,
-                quantity: quantity,
-                newOrderRespType: "FULL",
-            });
-            console.log("Entry order placed:", orderResult);
+            // Prepare risk configuration
+            const riskConfig = {
+                riskPerTradePercent: alert.riskPerTradePercent || 1.0,
+                stopLossPercent: alert.stopLossPercent || 0.25,
+                maxLeverage: leverage,
+                minOrderSize: 0.001,
+            };
+            let orderResult;
+            if (alert.quantity) {
+                // Manual quantity override - use regular order placement
+                console.log(`📊 Using manual quantity: ${alert.quantity}`);
+                // Set leverage first
+                yield (0, futures_js_1.changeFuturesLeverage)(symbol, leverage);
+                const contractType = getContractType(symbol);
+                const orderParams = Object.assign(Object.assign({ symbol: symbol, side: side, type: (alert.type || "MARKET"), quantity: alert.quantity }, (alert.price ? { price: alert.price } : {})), { newOrderRespType: "RESULT" });
+                if (contractType === "COIN-M") {
+                    orderResult = yield (0, futures_js_1.placeCoinMFuturesOrder)(orderParams);
+                }
+                else {
+                    orderResult = yield (0, futures_js_1.placeUSDTMFuturesOrder)(orderParams);
+                }
+                // Manually place stop loss if needed
+                if (alert.stopLossPercent || alert.stopPrice) {
+                    try {
+                        const currentPrice = yield (0, futures_js_1.getCurrentPrice)(symbol, contractType === "COIN-M");
+                        const stopPrice = alert.stopPrice
+                            ? parseFloat(alert.stopPrice)
+                            : side === "BUY"
+                                ? currentPrice * (1 - (alert.stopLossPercent || 0.25) / 100)
+                                : currentPrice * (1 + (alert.stopLossPercent || 0.25) / 100);
+                        const stopLossParams = {
+                            symbol: symbol,
+                            side: side === "BUY" ? "SELL" : "BUY",
+                            type: "STOP_MARKET",
+                            quantity: alert.quantity,
+                            stopPrice: stopPrice.toString(),
+                            reduceOnly: true,
+                            newOrderRespType: "RESULT",
+                        };
+                        let stopLossResult;
+                        if (contractType === "COIN-M") {
+                            stopLossResult = yield (0, futures_js_1.placeCoinMFuturesOrder)(stopLossParams);
+                        }
+                        else {
+                            stopLossResult = yield (0, futures_js_1.placeUSDTMFuturesOrder)(stopLossParams);
+                        }
+                        orderResult.stopLossOrder = stopLossResult;
+                    }
+                    catch (stopError) {
+                        console.warn("⚠️ Could not place stop loss:", stopError);
+                    }
+                }
+            }
+            else {
+                // Use risk-managed order
+                console.log(`🎯 Using risk-managed order with ${riskConfig.riskPerTradePercent}% risk`);
+                orderResult = yield (0, futures_js_1.placeSmartRiskOrder)(symbol, side, riskConfig);
+            }
+            console.log("✅ Futures entry order placed:", orderResult);
             // Store new position
             const newPosition = {
                 symbol: symbol,
                 side: side === "BUY" ? "LONG" : "SHORT",
-                quantity: parseFloat(quantity),
-                entryPrice: parseFloat(((_b = (_a = orderResult.fills) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.price) || orderResult.price || "0"),
-                orderId: orderResult.orderId,
+                quantity: parseFloat(((_a = orderResult.orderDetails) === null || _a === void 0 ? void 0 : _a.quantity) || alert.quantity || "0"),
+                entryPrice: ((_b = orderResult.orderDetails) === null || _b === void 0 ? void 0 : _b.price) || parseFloat(orderResult.price || "0"),
+                leverage: leverage,
+                contractType: getContractType(symbol),
+                orderId: ((_d = (_c = orderResult.orders) === null || _c === void 0 ? void 0 : _c.mainOrder) === null || _d === void 0 ? void 0 : _d.orderId) || orderResult.orderId,
+                stopLossOrderId: ((_f = (_e = orderResult.orders) === null || _e === void 0 ? void 0 : _e.stopLossOrder) === null || _f === void 0 ? void 0 : _f.orderId) ||
+                    ((_g = orderResult.stopLossOrder) === null || _g === void 0 ? void 0 : _g.orderId),
+                timestamp: new Date().toISOString(),
             };
-            activePositions.set(symbol, newPosition);
-            console.log(`New ${newPosition.side} position opened for ${symbol} at ${newPosition.entryPrice}`);
-            return orderResult;
+            activeFuturesPositions.set(symbol, newPosition);
+            console.log(`🎉 New ${newPosition.side} futures position opened for ${symbol} at ${newPosition.entryPrice} with ${newPosition.leverage}x leverage`);
+            return {
+                success: true,
+                action: "OPEN_POSITION",
+                position: newPosition,
+                orderResult: orderResult,
+            };
         }
         catch (error) {
-            console.error("Error handling open position:", error);
+            console.error("❌ Error handling open futures position:", error);
             throw error;
         }
     });
 }
-// Handle closing positions (both manual exits and stop losses)
-function handleClosePosition(alert) {
+// Updated function to handle closing futures positions
+function handleCloseFuturesPosition(alert) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const { symbol, side, quantity, type } = alert;
-            const currentPosition = activePositions.get(symbol);
+            const { symbol, side, type = "MARKET" } = alert;
+            let currentPosition = activeFuturesPositions.get(symbol);
+            // If no local position, check Binance directly
             if (!currentPosition) {
-                console.log(`No active position found for ${symbol}, skipping close order`);
-                return { message: "No active position found" };
+                console.log(`⚠️ No local position found for ${symbol}, checking Binance...`);
+                try {
+                    const binancePositions = yield (0, futures_js_1.getFuturesPositions)();
+                    const binancePos = binancePositions.find((pos) => pos.symbol === symbol && parseFloat(pos.positionAmt) !== 0);
+                    if (binancePos) {
+                        console.log(`Found position on Binance for ${symbol}:`, binancePos);
+                        // Create local position from Binance data
+                        currentPosition = {
+                            symbol: symbol,
+                            side: parseFloat(binancePos.positionAmt) > 0 ? "LONG" : "SHORT",
+                            quantity: Math.abs(parseFloat(binancePos.positionAmt)),
+                            entryPrice: parseFloat(binancePos.entryPrice),
+                            leverage: parseFloat(binancePos.leverage),
+                            contractType: getContractType(symbol),
+                            unrealizedPnl: parseFloat(binancePos.unRealizedProfit),
+                            timestamp: new Date().toISOString(),
+                        };
+                        // Update local tracking
+                        activeFuturesPositions.set(symbol, currentPosition);
+                    }
+                }
+                catch (syncError) {
+                    console.error("Error syncing position from Binance:", syncError);
+                }
             }
-            // For any close order, cancel all open orders first
-            try {
-                const cancelResult = yield (0, trade_js_1.cancelAllOpenOrdersForSymbol)(symbol);
-                console.log(`Cancelled all open orders for ${symbol}:`, cancelResult);
-            }
-            catch (error) {
-                console.log("Could not cancel open orders:", error);
-            }
-            // Handle market close (both manual exit and stop loss triggered)
-            if (type === "MARKET") {
-                console.log(`Market close order for ${symbol}`);
-                // Place market order to close position
-                const closeOrder = yield (0, trade_js_1.placeOrder)({
+            if (!currentPosition) {
+                console.log(`⚠️ No active position found for ${symbol} on Binance either`);
+                return {
+                    success: false,
+                    message: "No active position found to close",
                     symbol: symbol,
-                    side: side,
-                    type: "MARKET",
-                    quantity: quantity,
-                    newOrderRespType: "FULL",
-                });
-                // Remove position from tracking
-                activePositions.delete(symbol);
-                console.log(`Position closed for ${symbol}`);
-                return closeOrder;
+                };
             }
-            throw new Error(`Unsupported close order type: ${type}`);
+            console.log(`🔄 Closing ${currentPosition.side} position for ${symbol}`);
+            console.log(`Position details:`, currentPosition);
+            // Cancel stop loss order if exists
+            if (currentPosition.stopLossOrderId) {
+                try {
+                    yield (0, futures_js_1.cancelFuturesOrder)(symbol, currentPosition.stopLossOrderId);
+                    console.log(`✅ Cancelled stop loss order for ${symbol}`);
+                }
+                catch (error) {
+                    console.log("⚠️ Could not cancel stop loss:", error);
+                }
+            }
+            // Determine the correct side to close the position
+            // If we have a LONG position, we need to SELL to close
+            // If we have a SHORT position, we need to BUY to close
+            const closeSide = currentPosition.side === "LONG" ? "SELL" : "BUY";
+            console.log(`Position side: ${currentPosition.side}, Close side: ${closeSide}`);
+            // Use the position quantity from Binance, not the alert quantity
+            const closeQuantity = alert.quantity || currentPosition.quantity.toString();
+            // Place close order WITHOUT reduceOnly for market orders
+            const closeOrderParams = Object.assign(Object.assign(Object.assign({ symbol: symbol, side: closeSide, type: type, quantity: closeQuantity }, (alert.price ? { price: alert.price } : {})), (type === "LIMIT" ? { reduceOnly: true } : {})), { newOrderRespType: "RESULT" });
+            console.log(`Placing close order:`, closeOrderParams);
+            let closeOrderResult;
+            if (currentPosition.contractType === "COIN-M") {
+                closeOrderResult = yield (0, futures_js_1.placeCoinMFuturesOrder)(closeOrderParams);
+            }
+            else {
+                closeOrderResult = yield (0, futures_js_1.placeUSDTMFuturesOrder)(closeOrderParams);
+            }
+            console.log(`Close order result:`, closeOrderResult);
+            // Remove position from tracking
+            activeFuturesPositions.delete(symbol);
+            console.log(`✅ Position closed for ${symbol}`);
+            return {
+                success: true,
+                action: "CLOSE_POSITION",
+                closedPosition: currentPosition,
+                orderResult: closeOrderResult,
+            };
         }
         catch (error) {
-            console.error("Error handling close position:", error);
+            console.error("❌ Error handling close futures position:", error);
             throw error;
         }
     });
 }
-// Simplified market order handler (legacy support)
-function handleMarketOrder(alert) {
-    return __awaiter(this, void 0, void 0, function* () {
-        // This function is kept for backward compatibility
-        // But the new strategy uses the trade field to determine OPEN/CLOSE
-        const { symbol, side, quantity } = alert;
-        const currentPosition = activePositions.get(symbol);
-        const isEntry = !currentPosition;
-        const isExit = currentPosition &&
-            ((side === "SELL" && currentPosition.side === "LONG") ||
-                (side === "BUY" && currentPosition.side === "SHORT"));
-        if (isEntry) {
-            return yield handleOpenPosition(Object.assign(Object.assign({}, alert), { trade: "OPEN" }));
-        }
-        else if (isExit) {
-            return yield handleClosePosition(Object.assign(Object.assign({}, alert), { trade: "CLOSE" }));
-        }
-        throw new Error("Cannot determine if order is entry or exit");
-    });
-}
-// Legacy stop loss handler (kept for compatibility)
-function handleStopLossOrder(alert) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return yield handleClosePosition(Object.assign(Object.assign({}, alert), { trade: "CLOSE" }));
-    });
-}
-// Utility function to get current positions
-function getCurrentPositions() {
-    return new Map(activePositions);
-}
-// Utility function to get position for a specific symbol
-function getPosition(symbol) {
-    return activePositions.get(symbol);
-}
-// Utility function to manually close a position
-function closePosition(symbol) {
+// Updated function to close existing position
+function handleExistingFuturesPositionClose(symbol, position) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const position = activePositions.get(symbol);
-            if (!position) {
-                throw new Error(`No active position found for ${symbol}`);
-            }
-            // Cancel all open orders for this symbol first
-            try {
-                const cancelResult = yield (0, trade_js_1.cancelAllOpenOrdersForSymbol)(symbol);
-                console.log(`Cancelled all open orders for ${symbol}:`, cancelResult);
-            }
-            catch (error) {
-                console.log("Could not cancel open orders:", error);
+            console.log(`🔄 Closing existing position for ${symbol}:`, position);
+            // Cancel stop loss if exists
+            if (position.stopLossOrderId) {
+                try {
+                    yield (0, futures_js_1.cancelFuturesOrder)(symbol, position.stopLossOrderId);
+                    console.log(`Cancelled stop loss order ${position.stopLossOrderId} for ${symbol}`);
+                }
+                catch (error) {
+                    console.log("Could not cancel stop loss order:", error);
+                }
             }
             // Close position with market order
             const closeSide = position.side === "LONG" ? "SELL" : "BUY";
-            const closeOrder = yield (0, trade_js_1.placeOrder)({
+            const closeParams = {
                 symbol: symbol,
                 side: closeSide,
                 type: "MARKET",
                 quantity: position.quantity.toString(),
-            });
+                // Don't use reduceOnly for market close orders
+                newOrderRespType: "RESULT",
+            };
+            console.log(`Closing existing position with params:`, closeParams);
+            if (position.contractType === "COIN-M") {
+                yield (0, futures_js_1.placeCoinMFuturesOrder)(closeParams);
+            }
+            else {
+                yield (0, futures_js_1.placeUSDTMFuturesOrder)(closeParams);
+            }
             // Remove from tracking
-            activePositions.delete(symbol);
-            console.log(`Position manually closed for ${symbol}`);
-            return closeOrder;
+            activeFuturesPositions.delete(symbol);
+            console.log(`✅ Existing ${position.side} position closed for ${symbol}`);
         }
         catch (error) {
-            console.error("Error closing position:", error);
+            console.error(`❌ Error closing existing position for ${symbol}:`, error);
             throw error;
         }
     });
 }
-// Emergency function to close all positions
-function closeAllPositions() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const results = [];
-        for (const [symbol, position] of activePositions) {
-            try {
-                const result = yield closePosition(symbol);
-                results.push({ symbol, status: "closed", result });
-            }
-            catch (error) {
-                results.push({ symbol, status: "error", error });
-            }
-        }
-        return results;
-    });
-}
-// Function to check and sync positions with Binance account
-function syncPositions() {
+// Updated utility function to manually close a futures position
+function closeFuturesPosition(symbol) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const accountInfo = yield (0, trade_js_1.getAccountInfo)();
-            console.log("Syncing positions with account...");
-            // This is a basic sync - you might want to implement more sophisticated logic
-            // based on your actual account balances and open orders
+            let position = activeFuturesPositions.get(symbol);
+            // If no local position, sync from Binance first
+            if (!position) {
+                console.log(`No local position for ${symbol}, syncing from Binance...`);
+                yield syncFuturesPositions();
+                position = activeFuturesPositions.get(symbol);
+            }
+            if (!position) {
+                throw new Error(`No active futures position found for ${symbol}`);
+            }
+            console.log(`Manually closing position for ${symbol}:`, position);
+            // Cancel stop loss if exists
+            if (position.stopLossOrderId) {
+                try {
+                    yield (0, futures_js_1.cancelFuturesOrder)(symbol, position.stopLossOrderId);
+                    console.log(`Cancelled stop loss for ${symbol}`);
+                }
+                catch (error) {
+                    console.log("Could not cancel stop loss:", error);
+                }
+            }
+            // Close with market order
+            const closeSide = position.side === "LONG" ? "SELL" : "BUY";
+            const closeParams = {
+                symbol: symbol,
+                side: closeSide,
+                type: "MARKET",
+                quantity: position.quantity.toString(),
+                // Don't use reduceOnly for market orders - let Binance handle it
+                newOrderRespType: "RESULT",
+            };
+            console.log(`Manual close order params:`, closeParams);
+            let closeOrder;
+            if (position.contractType === "COIN-M") {
+                closeOrder = yield (0, futures_js_1.placeCoinMFuturesOrder)(closeParams);
+            }
+            else {
+                closeOrder = yield (0, futures_js_1.placeUSDTMFuturesOrder)(closeParams);
+            }
+            activeFuturesPositions.delete(symbol);
+            console.log(`✅ Futures position manually closed for ${symbol}`);
+            return {
+                success: true,
+                closedPosition: position,
+                orderResult: closeOrder,
+            };
         }
         catch (error) {
-            console.error("Error syncing positions:", error);
+            console.error("❌ Error closing futures position:", error);
+            throw error;
         }
     });
 }
-console.log("Trading alert handler initialized for RedTPX and SMI Strategy");
+// Add a new function to force close all positions
+function forceCloseAllPositions() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            console.log("🚨 Force closing all positions...");
+            // First sync with Binance to get latest positions
+            yield syncFuturesPositions();
+            const results = [];
+            const allPositions = Array.from(activeFuturesPositions.entries());
+            for (const [symbol, position] of allPositions) {
+                try {
+                    console.log(`Force closing ${symbol}...`);
+                    // Cancel any open orders first
+                    if (position.stopLossOrderId) {
+                        try {
+                            yield (0, futures_js_1.cancelFuturesOrder)(symbol, position.stopLossOrderId);
+                        }
+                        catch (e) {
+                            console.log(`Could not cancel stop loss for ${symbol}:`, e);
+                        }
+                    }
+                    // Close with opposite side market order
+                    const closeSide = position.side === "LONG" ? "SELL" : "BUY";
+                    const closeParams = {
+                        symbol: symbol,
+                        side: closeSide,
+                        type: "MARKET",
+                        quantity: position.quantity.toString(),
+                        newOrderRespType: "RESULT",
+                    };
+                    let closeResult;
+                    if (position.contractType === "COIN-M") {
+                        closeResult = yield (0, futures_js_1.placeCoinMFuturesOrder)(closeParams);
+                    }
+                    else {
+                        closeResult = yield (0, futures_js_1.placeUSDTMFuturesOrder)(closeParams);
+                    }
+                    activeFuturesPositions.delete(symbol);
+                    results.push({
+                        symbol,
+                        status: "closed",
+                        contractType: position.contractType,
+                        closeSide: closeSide,
+                        quantity: position.quantity,
+                        result: closeResult,
+                    });
+                    // Add delay between orders
+                    yield new Promise((resolve) => setTimeout(resolve, 500));
+                }
+                catch (error) {
+                    results.push({
+                        symbol,
+                        status: "error",
+                        contractType: position.contractType,
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                }
+            }
+            return results;
+        }
+        catch (error) {
+            console.error("❌ Error in force close all positions:", error);
+            throw error;
+        }
+    });
+}
+// Get current futures positions
+function getCurrentFuturesPositions() {
+    return new Map(activeFuturesPositions);
+}
+// Get specific futures position
+function getFuturesPosition(symbol) {
+    return activeFuturesPositions.get(symbol);
+}
+// Sync positions with Binance account
+function syncFuturesPositions() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            console.log("🔄 Syncing futures positions with account...");
+            const binancePositions = yield (0, futures_js_1.getFuturesPositions)();
+            const activePositions = binancePositions.filter((pos) => parseFloat(pos.positionAmt) !== 0);
+            console.log(`📊 Found ${activePositions.length} active positions on Binance`);
+            // Update local tracking with Binance data
+            for (const pos of activePositions) {
+                const localPos = {
+                    symbol: pos.symbol,
+                    side: parseFloat(pos.positionAmt) > 0 ? "LONG" : "SHORT",
+                    quantity: Math.abs(parseFloat(pos.positionAmt)),
+                    entryPrice: parseFloat(pos.entryPrice),
+                    leverage: parseFloat(pos.leverage),
+                    contractType: getContractType(pos.symbol),
+                    unrealizedPnl: parseFloat(pos.unRealizedProfit),
+                    timestamp: new Date().toISOString(),
+                };
+                activeFuturesPositions.set(pos.symbol, localPos);
+            }
+            console.log("✅ Futures positions synced successfully");
+        }
+        catch (error) {
+            console.error("❌ Error syncing futures positions:", error);
+        }
+    });
+}
+// Legacy function for backward compatibility
+function handleTradingAlert(alertJson) {
+    return __awaiter(this, void 0, void 0, function* () {
+        console.log("⚠️ Using legacy handler - redirecting to futures handler");
+        return yield handleFuturesTradingAlert(alertJson);
+    });
+}
+console.log("🚀 Futures-only trading alert handler initialized");

@@ -14,8 +14,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.placeOrder = placeOrder;
 exports.getAccountInfo = getAccountInfo;
+exports.getUSDAccountBalance = getUSDAccountBalance;
+exports.getAssetBalance = getAssetBalance;
 exports.getOrderStatus = getOrderStatus;
 exports.getOpenOrders = getOpenOrders;
+exports.getAllOrders = getAllOrders;
+exports.getOrderList = getOrderList;
+exports.getAllOrderLists = getAllOrderLists;
 exports.cancelOrder = cancelOrder;
 exports.cancelAllOpenOrders = cancelAllOpenOrders;
 exports.cancelAllOpenOrdersForSymbol = cancelAllOpenOrdersForSymbol;
@@ -316,4 +321,241 @@ function cancelAllOpenOrdersForSymbol(symbol, recvWindow) {
         return yield cancelAllOpenOrders(symbol, recvWindow);
     });
 }
-console.log("Binance trading functions initialized");
+// ...existing code...
+// Function to get all orders (active, canceled, or filled)
+function getAllOrders(orderParams) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const timestamp = Date.now();
+            const params = {
+                symbol: orderParams.symbol,
+                timestamp: timestamp,
+            };
+            if (orderParams.orderId) {
+                params.orderId = orderParams.orderId;
+            }
+            if (orderParams.startTime) {
+                params.startTime = orderParams.startTime;
+            }
+            if (orderParams.endTime) {
+                params.endTime = orderParams.endTime;
+            }
+            if (orderParams.limit) {
+                params.limit = Math.min(orderParams.limit, 1000); // Max 1000
+            }
+            if (orderParams.recvWindow) {
+                params.recvWindow = orderParams.recvWindow;
+            }
+            // Create signature
+            const signature = createSignature(params, apiSecret);
+            params.signature = signature;
+            console.log("Get all orders request:", JSON.stringify(params, null, 2));
+            // Create query string for URL
+            const queryString = Object.keys(params)
+                .map((key) => `${key}=${encodeURIComponent(params[key])}`)
+                .join("&");
+            const response = yield fetch(`https://testnet.binance.vision/api/v3/allOrders?${queryString}`, {
+                method: "GET",
+                headers: {
+                    "X-MBX-APIKEY": apiKey,
+                },
+            });
+            const result = yield response.json();
+            console.log("All orders response:", result);
+            return result;
+        }
+        catch (error) {
+            console.error("Error getting all orders:", error);
+            throw error;
+        }
+    });
+}
+// Function to query a specific order list
+function getOrderList(orderListParams) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const timestamp = Date.now();
+            const params = {
+                timestamp: timestamp,
+            };
+            if (orderListParams.orderListId) {
+                params.orderListId = orderListParams.orderListId;
+            }
+            if (orderListParams.origClientOrderId) {
+                params.origClientOrderId = orderListParams.origClientOrderId;
+            }
+            if (orderListParams.recvWindow) {
+                params.recvWindow = orderListParams.recvWindow;
+            }
+            // Validate that either orderListId or origClientOrderId is provided
+            if (!orderListParams.orderListId && !orderListParams.origClientOrderId) {
+                throw new Error("Either orderListId or origClientOrderId must be provided");
+            }
+            // Create signature
+            const signature = createSignature(params, apiSecret);
+            params.signature = signature;
+            console.log("Get order list request:", JSON.stringify(params, null, 2));
+            // Create query string for URL
+            const queryString = Object.keys(params)
+                .map((key) => `${key}=${encodeURIComponent(params[key])}`)
+                .join("&");
+            const response = yield fetch(`https://testnet.binance.vision/api/v3/orderList?${queryString}`, {
+                method: "GET",
+                headers: {
+                    "X-MBX-APIKEY": apiKey,
+                },
+            });
+            const result = yield response.json();
+            console.log("Order list response:", result);
+            return result;
+        }
+        catch (error) {
+            console.error("Error getting order list:", error);
+            throw error;
+        }
+    });
+}
+// Function to get all order lists
+function getAllOrderLists(orderListParams) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const timestamp = Date.now();
+            const params = {
+                timestamp: timestamp,
+            };
+            if (orderListParams === null || orderListParams === void 0 ? void 0 : orderListParams.fromId) {
+                params.fromId = orderListParams.fromId;
+                // If fromId is supplied, neither startTime nor endTime can be provided
+            }
+            else {
+                if (orderListParams === null || orderListParams === void 0 ? void 0 : orderListParams.startTime) {
+                    params.startTime = orderListParams.startTime;
+                }
+                if (orderListParams === null || orderListParams === void 0 ? void 0 : orderListParams.endTime) {
+                    params.endTime = orderListParams.endTime;
+                }
+            }
+            if (orderListParams === null || orderListParams === void 0 ? void 0 : orderListParams.limit) {
+                params.limit = Math.min(orderListParams.limit, 1000); // Max 1000
+            }
+            if (orderListParams === null || orderListParams === void 0 ? void 0 : orderListParams.recvWindow) {
+                params.recvWindow = orderListParams.recvWindow;
+            }
+            // Create signature
+            const signature = createSignature(params, apiSecret);
+            params.signature = signature;
+            console.log("Get all order lists request:", JSON.stringify(params, null, 2));
+            // Create query string for URL
+            const queryString = Object.keys(params)
+                .map((key) => `${key}=${encodeURIComponent(params[key])}`)
+                .join("&");
+            const response = yield fetch(`https://testnet.binance.vision/api/v3/allOrderList?${queryString}`, {
+                method: "GET",
+                headers: {
+                    "X-MBX-APIKEY": apiKey,
+                },
+            });
+            const result = yield response.json();
+            console.log("All order lists response:", result);
+            return result;
+        }
+        catch (error) {
+            console.error("Error getting all order lists:", error);
+            throw error;
+        }
+    });
+}
+// ...existing code...
+// Function to get USD account balance specifically
+function getUSDAccountBalance(recvWindow) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            // Get full account info
+            const accountInfo = yield getAccountInfo(true, recvWindow); // omitZeroBalances = true
+            if (!accountInfo || !accountInfo.balances) {
+                throw new Error("Invalid account info response");
+            }
+            // Filter for USD-related assets
+            const usdBalances = accountInfo.balances.filter((balance) => {
+                const asset = balance.asset.toUpperCase();
+                return (asset === "USDT" ||
+                    asset === "USDC" ||
+                    asset === "BUSD" ||
+                    asset === "USD" ||
+                    asset === "TUSD" ||
+                    asset === "USDP" ||
+                    asset === "DAI" ||
+                    asset.includes("USD"));
+            });
+            // Calculate total USD value
+            let totalUSDBalance = 0;
+            const usdAssets = [];
+            for (const balance of usdBalances) {
+                const free = parseFloat(balance.free);
+                const locked = parseFloat(balance.locked);
+                const total = free + locked;
+                if (total > 0) {
+                    usdAssets.push({
+                        asset: balance.asset,
+                        free: balance.free,
+                        locked: balance.locked,
+                        total: total.toFixed(8),
+                    });
+                    // For stablecoins, assume 1:1 USD value
+                    if (["USDT", "USDC", "BUSD", "TUSD", "USDP"].includes(balance.asset)) {
+                        totalUSDBalance += total;
+                    }
+                }
+            }
+            console.log("USD Assets:", usdAssets);
+            console.log("Total USD Balance:", totalUSDBalance.toFixed(2));
+            // For other USD-related assets, you may need to fetch current prices
+            return {
+                totalUSDBalance: totalUSDBalance.toFixed(2),
+                usdAssets: usdAssets,
+                accountType: accountInfo.accountType || "SPOT",
+                canTrade: accountInfo.canTrade || false,
+                canWithdraw: accountInfo.canWithdraw || false,
+                canDeposit: accountInfo.canDeposit || false,
+                timestamp: new Date().toISOString(),
+            };
+        }
+        catch (error) {
+            console.error("Error getting USD account balance:", error);
+            throw error;
+        }
+    });
+}
+// Function to get specific asset balance
+function getAssetBalance(asset, recvWindow) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const accountInfo = yield getAccountInfo(true, recvWindow);
+            if (!accountInfo || !accountInfo.balances) {
+                throw new Error("Invalid account info response");
+            }
+            const assetBalance = accountInfo.balances.find((balance) => balance.asset.toUpperCase() === asset.toUpperCase());
+            if (!assetBalance) {
+                return {
+                    asset: asset.toUpperCase(),
+                    free: "0.00000000",
+                    locked: "0.00000000",
+                    total: "0.00000000",
+                };
+            }
+            const free = parseFloat(assetBalance.free);
+            const locked = parseFloat(assetBalance.locked);
+            const total = free + locked;
+            return {
+                asset: assetBalance.asset,
+                free: assetBalance.free,
+                locked: assetBalance.locked,
+                total: total.toFixed(8),
+            };
+        }
+        catch (error) {
+            console.error(`Error getting ${asset} balance:`, error);
+            throw error;
+        }
+    });
+}
