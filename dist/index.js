@@ -1,4 +1,5 @@
 "use strict";
+// @ts-nocheck
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -23,17 +24,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// @ts-nocheck
 const express_1 = __importDefault(require("express"));
-const http_1 = __importDefault(require("http"));
 const https_1 = __importDefault(require("https"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const child_process_1 = require("child_process");
 const handel_js_1 = require("./handel.js");
 const futures_js_1 = require("./futures.js");
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 80;
-const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+const PORT = Number(process.env.PORT) || 80;
+const HTTPS_PORT = Number(process.env.HTTPS_PORT) || 443;
 // Middleware
 app.use(express_1.default.json({ limit: "10mb" }));
 app.use(express_1.default.urlencoded({ extended: true, limit: "10mb" }));
@@ -166,27 +166,6 @@ app.post("/api/futures/positions/:symbol/close", (req, res) => __awaiter(void 0,
         res.status(500).json({
             success: false,
             error: `Failed to close position for ${req.params.symbol}`,
-            message: error instanceof Error ? error.message : String(error),
-        });
-    }
-}));
-// Close all positions (emergency)
-app.post("/api/futures/positions/close-all", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const results = yield (0, handel_js_1.closeAllFuturesPositions)();
-        const successCount = results.filter((r) => r.status === "closed").length;
-        res.status(200).json({
-            success: true,
-            message: `Closed ${successCount}/${results.length} positions`,
-            results: results,
-            timestamp: new Date().toISOString(),
-        });
-    }
-    catch (error) {
-        console.error("❌ Error closing all positions:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to close all positions",
             message: error instanceof Error ? error.message : String(error),
         });
     }
@@ -454,46 +433,61 @@ app.use((err, req, res, next) => {
         timestamp: new Date().toISOString(),
     });
 });
-// HTTPS setup (optional)
-let httpsServerStarted = false;
+// HTTPS setup - MANDATORY with auto-certificate creation
 try {
-    const keyPath = path_1.default.join(__dirname, "../certs/private-key.pem");
-    const certPath = path_1.default.join(__dirname, "../certs/certificate.pem");
-    if (fs_1.default.existsSync(keyPath) && fs_1.default.existsSync(certPath)) {
-        const sslOptions = {
-            key: fs_1.default.readFileSync(keyPath),
-            cert: fs_1.default.readFileSync(certPath),
-        };
-        https_1.default.createServer(sslOptions, app).listen(HTTPS_PORT, "0.0.0.0", () => {
-            console.log(`✅ HTTPS Server running on port ${HTTPS_PORT}`);
-            httpsServerStarted = true;
-        });
+    const sslDir = path_1.default.join(__dirname, "ssl");
+    const keyPath = path_1.default.join(sslDir, "key.pem");
+    const certPath = path_1.default.join(sslDir, "cert.pem");
+    if (!fs_1.default.existsSync(keyPath) || !fs_1.default.existsSync(certPath)) {
+        console.log("🔒 SSL certificates not found. Creating self-signed certificates...");
+        try {
+            // Create ssl directory if it doesn't exist
+            if (!fs_1.default.existsSync(sslDir)) {
+                fs_1.default.mkdirSync(sslDir, { recursive: true });
+                console.log("📁 Created ssl directory");
+            }
+            // Generate self-signed SSL certificate
+            const openSSLCommand = `openssl req -x509 -newkey rsa:4096 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"`;
+            console.log("🔐 Generating SSL certificates...");
+            (0, child_process_1.execSync)(openSSLCommand, { stdio: "inherit" });
+            console.log("✅ SSL certificates created successfully!");
+            console.log(`   - Private key: ${keyPath}`);
+            console.log(`   - Certificate: ${certPath}`);
+        }
+        catch (certError) {
+            console.error("❌ Failed to create SSL certificates:", certError);
+            console.log("📝 Please install OpenSSL and try again, or create certificates manually:");
+            console.log("   mkdir -p ssl");
+            console.log("   openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes");
+            console.log("⚠️  Server cannot start without SSL certificates. Exiting...");
+            process.exit(1);
+        }
     }
     else {
-        console.log("⚠️  SSL certificates not found at:");
-        console.log(`   Key: ${keyPath}`);
-        console.log(`   Cert: ${certPath}`);
-        console.log("📝 To create SSL certificates, run:");
-        console.log("   mkdir -p certs");
-        console.log("   openssl req -x509 -newkey rsa:4096 -keyout certs/private-key.pem -out certs/certificate.pem -days 365 -nodes");
+        console.log("✅ SSL certificates found");
     }
-}
-catch (error) {
-    console.error("❌ Failed to start HTTPS server:", error);
-}
-// Start HTTP server - bind to all interfaces (0.0.0.0)
-http_1.default.createServer(app).listen(PORT, "0.0.0.0", () => {
-    console.log(`✅ HTTP Server running on port ${PORT}`);
-    console.log(`🌐 Trading Bot Server accessible at:`);
-    console.log(`   - http://localhost:${PORT}`);
-    console.log(`   - http://bukxe.com`);
-    if (httpsServerStarted) {
+    const sslOptions = {
+        key: fs_1.default.readFileSync(keyPath),
+        cert: fs_1.default.readFileSync(certPath),
+    };
+    // Start HTTPS server - MANDATORY
+    https_1.default.createServer(sslOptions, app).listen(HTTPS_PORT, "0.0.0.0", () => {
+        console.log(`✅ HTTPS Server running on port ${HTTPS_PORT}`);
+        console.log(`🔒 Secure Trading Bot Server accessible at:`);
         console.log(`   - https://localhost:${HTTPS_PORT}`);
         console.log(`   - https://bukxe.com`);
-    }
-    console.log(`📊 API Endpoints:`);
-    console.log(`   - POST /api/webhook (TradingView alerts)`);
-    console.log(`   - GET  /api/positions (view positions)`);
-    console.log(`   - POST /api/positions/:symbol/close (close position)`);
-    console.log(`   - POST /api/positions/close-all (emergency close)`);
-});
+        console.log(`📊 API Endpoints (HTTPS only):`);
+        console.log(`   - POST /api/webhook (TradingView alerts)`);
+        console.log(`   - GET  /api/futures/positions (view positions)`);
+        console.log(`   - POST /api/futures/positions/:symbol/close (close position)`);
+        console.log(`   - POST /api/futures/positions/close-all (emergency close)`);
+        console.log("⚠️  Note: Using self-signed certificate. Browsers will show security warning.");
+    });
+}
+catch (error) {
+    console.error("❌ Failed to start HTTPS server:", error instanceof Error ? error.message : String(error));
+    console.log("⚠️  HTTPS server is mandatory. Exiting...");
+    process.exit(1);
+}
+// HTTP server removed - HTTPS only
+console.log("🔒 Server running in HTTPS-only mode for security");
