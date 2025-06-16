@@ -9,12 +9,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.testOpenOrders = exports.testOrderFlow = exports.testAccountOnly = exports.runAllTests = exports.exampleCancelAllOpenOrders = exports.exampleCancelAllOpenOrdersForSymbol = exports.exampleCancelOrder = exports.exampleGetOpenOrders = exports.exampleGetOrderStatus = exports.examplePlaceOrder = exports.exampleGetAccountInfo = void 0;
+exports.exampleGetAccountInfo = exampleGetAccountInfo;
+exports.examplePlaceOrder = examplePlaceOrder;
+exports.exampleGetOrderStatus = exampleGetOrderStatus;
+exports.exampleGetOpenOrders = exampleGetOpenOrders;
+exports.exampleCancelOrder = exampleCancelOrder;
+exports.exampleCancelAllOpenOrdersForSymbol = exampleCancelAllOpenOrdersForSymbol;
+exports.exampleCancelAllOpenOrders = exampleCancelAllOpenOrders;
+exports.runAllTests = runAllTests;
+exports.testAccountOnly = testAccountOnly;
+exports.testOrderFlow = testOrderFlow;
+exports.testOpenOrders = testOpenOrders;
 const trade_1 = require("./trade");
 // Example 1: Get account information
 function exampleGetAccountInfo() {
-    var _a;
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         console.log("\n=== Testing Account Info ===");
         try {
             const accountInfo = yield (0, trade_1.getAccountInfo)(true); // omit zero balances
@@ -33,7 +43,6 @@ function exampleGetAccountInfo() {
         }
     });
 }
-exports.exampleGetAccountInfo = exampleGetAccountInfo;
 // Example 2: Place a test order (small amount)
 function examplePlaceOrder() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -65,10 +74,9 @@ function examplePlaceOrder() {
         }
     });
 }
-exports.examplePlaceOrder = examplePlaceOrder;
 // Example 3: Get order status
-function exampleGetOrderStatus(orderId, symbol = "BTCUSDT") {
-    return __awaiter(this, void 0, void 0, function* () {
+function exampleGetOrderStatus(orderId_1) {
+    return __awaiter(this, arguments, void 0, function* (orderId, symbol = "BTCUSDT") {
         console.log("\n=== Testing Get Order Status ===");
         try {
             const orderStatus = yield (0, trade_1.getOrderStatus)({
@@ -92,7 +100,6 @@ function exampleGetOrderStatus(orderId, symbol = "BTCUSDT") {
         }
     });
 }
-exports.exampleGetOrderStatus = exampleGetOrderStatus;
 // Example 4: Get open orders
 function exampleGetOpenOrders(symbol) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -119,10 +126,9 @@ function exampleGetOpenOrders(symbol) {
         }
     });
 }
-exports.exampleGetOpenOrders = exampleGetOpenOrders;
 // Example 5: Cancel a specific order
-function exampleCancelOrder(orderId, symbol = "BTCUSDT") {
-    return __awaiter(this, void 0, void 0, function* () {
+function exampleCancelOrder(orderId_1) {
+    return __awaiter(this, arguments, void 0, function* (orderId, symbol = "BTCUSDT") {
         console.log("\n=== Testing Cancel Order ===");
         try {
             const cancelResult = yield (0, trade_1.cancelOrder)({
@@ -144,10 +150,9 @@ function exampleCancelOrder(orderId, symbol = "BTCUSDT") {
         }
     });
 }
-exports.exampleCancelOrder = exampleCancelOrder;
 // Example 6: Cancel all open orders for a symbol
-function exampleCancelAllOpenOrdersForSymbol(symbol = "BTCUSDT") {
-    return __awaiter(this, void 0, void 0, function* () {
+function exampleCancelAllOpenOrdersForSymbol() {
+    return __awaiter(this, arguments, void 0, function* (symbol = "BTCUSDT") {
         console.log("\n=== Testing Cancel All Open Orders for Symbol ===");
         try {
             const cancelResult = yield (0, trade_1.cancelAllOpenOrdersForSymbol)(symbol);
@@ -168,7 +173,6 @@ function exampleCancelAllOpenOrdersForSymbol(symbol = "BTCUSDT") {
         }
     });
 }
-exports.exampleCancelAllOpenOrdersForSymbol = exampleCancelAllOpenOrdersForSymbol;
 // Example 7: Cancel all open orders (all symbols)
 function exampleCancelAllOpenOrders() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -192,7 +196,6 @@ function exampleCancelAllOpenOrders() {
         }
     });
 }
-exports.exampleCancelAllOpenOrders = exampleCancelAllOpenOrders;
 // Comprehensive test runner
 function runAllTests() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -235,14 +238,12 @@ function runAllTests() {
         }
     });
 }
-exports.runAllTests = runAllTests;
 // Individual test functions for manual testing
 function testAccountOnly() {
     return __awaiter(this, void 0, void 0, function* () {
         yield exampleGetAccountInfo();
     });
 }
-exports.testAccountOnly = testAccountOnly;
 function testOrderFlow() {
     return __awaiter(this, void 0, void 0, function* () {
         const order = yield examplePlaceOrder();
@@ -250,14 +251,12 @@ function testOrderFlow() {
         yield exampleCancelOrder(order.orderId);
     });
 }
-exports.testOrderFlow = testOrderFlow;
 function testOpenOrders() {
     return __awaiter(this, void 0, void 0, function* () {
         yield exampleGetOpenOrders();
         yield exampleGetOpenOrders("BTCUSDT");
     });
 }
-exports.testOpenOrders = testOpenOrders;
 // Run tests if this file is executed directly
 if (require.main === module) {
     runAllTests();

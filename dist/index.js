@@ -470,14 +470,16 @@ try {
         });
     }
     else {
-        console.log("⚠️  SSL certificates not found.");
+        console.log("⚠️  SSL certificates not found at:");
+        console.log(`   Key: ${keyPath}`);
+        console.log(`   Cert: ${certPath}`);
         console.log("📝 To create SSL certificates, run:");
-        console.log("   mkdir -p ssl");
-        console.log("   openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes");
+        console.log("   mkdir -p certs");
+        console.log("   openssl req -x509 -newkey rsa:4096 -keyout certs/private-key.pem -out certs/certificate.pem -days 365 -nodes");
     }
 }
 catch (error) {
-    console.error("❌ Failed to start HTTPS server:", error.message);
+    console.error("❌ Failed to start HTTPS server:", error);
 }
 // Start HTTP server - bind to all interfaces (0.0.0.0)
 http_1.default.createServer(app).listen(PORT, "0.0.0.0", () => {

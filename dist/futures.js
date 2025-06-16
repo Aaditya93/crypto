@@ -12,7 +12,23 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAccountCapital = exports.getCurrentPrice = exports.placeBatchRiskOrders = exports.placeSmartRiskOrder = exports.placeRiskManagedOrder = exports.cancelFuturesOrder = exports.changeFuturesLeverage = exports.getFuturesPositions = exports.getFuturesAccountInfo = exports.getMinOrderRequirements = exports.getValidTestSymbols = exports.placeSafeTestTrade = exports.placeSmallTestTrades = exports.placeSmartFuturesOrder = exports.placeCoinMFuturesOrder = exports.placeUSDTMFuturesOrder = exports.placeFuturesOrder = void 0;
+exports.placeFuturesOrder = placeFuturesOrder;
+exports.placeUSDTMFuturesOrder = placeUSDTMFuturesOrder;
+exports.placeCoinMFuturesOrder = placeCoinMFuturesOrder;
+exports.placeSmartFuturesOrder = placeSmartFuturesOrder;
+exports.placeSmallTestTrades = placeSmallTestTrades;
+exports.placeSafeTestTrade = placeSafeTestTrade;
+exports.getValidTestSymbols = getValidTestSymbols;
+exports.getMinOrderRequirements = getMinOrderRequirements;
+exports.getFuturesAccountInfo = getFuturesAccountInfo;
+exports.getFuturesPositions = getFuturesPositions;
+exports.changeFuturesLeverage = changeFuturesLeverage;
+exports.cancelFuturesOrder = cancelFuturesOrder;
+exports.placeRiskManagedOrder = placeRiskManagedOrder;
+exports.placeSmartRiskOrder = placeSmartRiskOrder;
+exports.placeBatchRiskOrders = placeBatchRiskOrders;
+exports.getCurrentPrice = getCurrentPrice;
+exports.getAccountCapital = getAccountCapital;
 // Function to create signature for futures API
 const dotenv_1 = __importDefault(require("dotenv"));
 const crypto_1 = __importDefault(require("crypto"));
@@ -61,7 +77,6 @@ function placeFuturesOrder(orderParams) {
         }
     });
 }
-exports.placeFuturesOrder = placeFuturesOrder;
 // Function to get futures account information
 function getFuturesAccountInfo(recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -96,7 +111,6 @@ function getFuturesAccountInfo(recvWindow) {
         }
     });
 }
-exports.getFuturesAccountInfo = getFuturesAccountInfo;
 // Function to get futures positions
 function getFuturesPositions(recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -131,7 +145,6 @@ function getFuturesPositions(recvWindow) {
         }
     });
 }
-exports.getFuturesPositions = getFuturesPositions;
 // Function to change futures leverage
 function changeFuturesLeverage(symbol, leverage, recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -169,7 +182,6 @@ function changeFuturesLeverage(symbol, leverage, recvWindow) {
         }
     });
 }
-exports.changeFuturesLeverage = changeFuturesLeverage;
 // Function to cancel futures order
 function cancelFuturesOrder(symbol, orderId, origClientOrderId, recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -214,7 +226,6 @@ function cancelFuturesOrder(symbol, orderId, origClientOrderId, recvWindow) {
         }
     });
 }
-exports.cancelFuturesOrder = cancelFuturesOrder;
 // Function to place USDT-M futures order (perpetual contracts)
 function placeUSDTMFuturesOrder(orderParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -245,7 +256,6 @@ function placeUSDTMFuturesOrder(orderParams) {
         }
     });
 }
-exports.placeUSDTMFuturesOrder = placeUSDTMFuturesOrder;
 // Function to place Coin-M futures order (delivery contracts)
 function placeCoinMFuturesOrder(orderParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -276,7 +286,6 @@ function placeCoinMFuturesOrder(orderParams) {
         }
     });
 }
-exports.placeCoinMFuturesOrder = placeCoinMFuturesOrder;
 // Smart function that automatically detects and places the correct order type
 function placeSmartFuturesOrder(orderParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -300,10 +309,9 @@ function placeSmartFuturesOrder(orderParams) {
         }
     });
 }
-exports.placeSmartFuturesOrder = placeSmartFuturesOrder;
 // Function to get current price for a symbol
-function getCurrentPrice(symbol, isCoinM = false) {
-    return __awaiter(this, void 0, void 0, function* () {
+function getCurrentPrice(symbol_1) {
+    return __awaiter(this, arguments, void 0, function* (symbol, isCoinM = false) {
         try {
             const endpoint = isCoinM
                 ? `https://testnet.binancefuture.com/dapi/v1/ticker/price?symbol=${symbol}`
@@ -323,11 +331,10 @@ function getCurrentPrice(symbol, isCoinM = false) {
         }
     });
 }
-exports.getCurrentPrice = getCurrentPrice;
 // Function to get account balance
-function getAccountCapital(isCoinM = false) {
-    var _a;
-    return __awaiter(this, void 0, void 0, function* () {
+function getAccountCapital() {
+    return __awaiter(this, arguments, void 0, function* (isCoinM = false) {
+        var _a;
         try {
             let accountInfo;
             if (isCoinM) {
@@ -359,7 +366,6 @@ function getAccountCapital(isCoinM = false) {
         }
     });
 }
-exports.getAccountCapital = getAccountCapital;
 // Main function to calculate position size and place order with risk management
 function placeRiskManagedOrder(orderParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -456,7 +462,6 @@ function placeRiskManagedOrder(orderParams) {
         }
     });
 }
-exports.placeRiskManagedOrder = placeRiskManagedOrder;
 // Convenience function with default risk settings
 function placeSmartRiskOrder(symbol, side, customRisk) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -476,7 +481,6 @@ function placeSmartRiskOrder(symbol, side, customRisk) {
         });
     });
 }
-exports.placeSmartRiskOrder = placeSmartRiskOrder;
 // Function to place multiple risk-managed orders
 function placeBatchRiskOrders(orders) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -499,11 +503,10 @@ function placeBatchRiskOrders(orders) {
         return results;
     });
 }
-exports.placeBatchRiskOrders = placeBatchRiskOrders;
 // Function to get exchange info and find valid symbols
 function getValidTestSymbols() {
-    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         try {
             // Get USDT-M futures symbols
             const usdtMResponse = yield fetch(`https://testnet.binancefuture.com/fapi/v1/exchangeInfo`, {
@@ -535,11 +538,10 @@ function getValidTestSymbols() {
         }
     });
 }
-exports.getValidTestSymbols = getValidTestSymbols;
 // Function to get minimum order requirements for a symbol
-function getMinOrderRequirements(symbol, isCoinM = false) {
-    var _a;
-    return __awaiter(this, void 0, void 0, function* () {
+function getMinOrderRequirements(symbol_1) {
+    return __awaiter(this, arguments, void 0, function* (symbol, isCoinM = false) {
+        var _a;
         try {
             const endpoint = isCoinM
                 ? `https://testnet.binancefuture.com/dapi/v1/exchangeInfo`
@@ -593,11 +595,10 @@ function getMinOrderRequirements(symbol, isCoinM = false) {
         }
     });
 }
-exports.getMinOrderRequirements = getMinOrderRequirements;
 // Updated function to place small test trades with proper minimum sizes
 function placeSmallTestTrades() {
-    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         try {
             console.log("🧪 Starting small test trades with proper minimum sizes...");
             const results = [];
@@ -713,10 +714,9 @@ function placeSmallTestTrades() {
         }
     });
 }
-exports.placeSmallTestTrades = placeSmallTestTrades;
 // Alternative function for safe testing with very small amounts
-function placeSafeTestTrade(symbol, isCoinM = false) {
-    return __awaiter(this, void 0, void 0, function* () {
+function placeSafeTestTrade(symbol_1) {
+    return __awaiter(this, arguments, void 0, function* (symbol, isCoinM = false) {
         try {
             console.log(`🧪 Placing safe test trade for ${symbol} (${isCoinM ? "Coin-M" : "USDT-M"})`);
             // Get minimum requirements
@@ -779,4 +779,3 @@ function placeSafeTestTrade(symbol, isCoinM = false) {
         }
     });
 }
-exports.placeSafeTestTrade = placeSafeTestTrade;

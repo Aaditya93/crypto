@@ -9,7 +9,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleTradingAlert = exports.syncFuturesPositions = exports.getFuturesPosition = exports.getCurrentFuturesPositions = exports.forceCloseAllPositions = exports.closeFuturesPosition = exports.handleFuturesTradingAlert = void 0;
+exports.handleFuturesTradingAlert = handleFuturesTradingAlert;
+exports.closeFuturesPosition = closeFuturesPosition;
+exports.forceCloseAllPositions = forceCloseAllPositions;
+exports.getCurrentFuturesPositions = getCurrentFuturesPositions;
+exports.getFuturesPosition = getFuturesPosition;
+exports.syncFuturesPositions = syncFuturesPositions;
+exports.handleTradingAlert = handleTradingAlert;
 const futures_js_1 = require("./futures.js");
 // In-memory position tracking for futures
 const activeFuturesPositions = new Map();
@@ -52,11 +58,10 @@ function handleFuturesTradingAlert(alertJson) {
         }
     });
 }
-exports.handleFuturesTradingAlert = handleFuturesTradingAlert;
 // Handle opening new futures positions with risk management
 function handleOpenFuturesPosition(alert) {
-    var _a, _b, _c, _d, _e, _f, _g;
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d, _e, _f, _g;
         try {
             const { symbol, side, leverage = 50 } = alert;
             const currentPosition = activeFuturesPositions.get(symbol);
@@ -338,7 +343,6 @@ function closeFuturesPosition(symbol) {
         }
     });
 }
-exports.closeFuturesPosition = closeFuturesPosition;
 // Add a new function to force close all positions
 function forceCloseAllPositions() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -405,17 +409,14 @@ function forceCloseAllPositions() {
         }
     });
 }
-exports.forceCloseAllPositions = forceCloseAllPositions;
 // Get current futures positions
 function getCurrentFuturesPositions() {
     return new Map(activeFuturesPositions);
 }
-exports.getCurrentFuturesPositions = getCurrentFuturesPositions;
 // Get specific futures position
 function getFuturesPosition(symbol) {
     return activeFuturesPositions.get(symbol);
 }
-exports.getFuturesPosition = getFuturesPosition;
 // Sync positions with Binance account
 function syncFuturesPositions() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -445,7 +446,6 @@ function syncFuturesPositions() {
         }
     });
 }
-exports.syncFuturesPositions = syncFuturesPositions;
 // Legacy function for backward compatibility
 function handleTradingAlert(alertJson) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -453,5 +453,4 @@ function handleTradingAlert(alertJson) {
         return yield handleFuturesTradingAlert(alertJson);
     });
 }
-exports.handleTradingAlert = handleTradingAlert;
 console.log("🚀 Futures-only trading alert handler initialized");

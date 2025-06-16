@@ -12,7 +12,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cancelAllOpenOrdersForSymbol = exports.cancelAllOpenOrders = exports.cancelOrder = exports.getAllOrderLists = exports.getOrderList = exports.getAllOrders = exports.getOpenOrders = exports.getOrderStatus = exports.getAssetBalance = exports.getUSDAccountBalance = exports.getAccountInfo = exports.placeOrder = void 0;
+exports.placeOrder = placeOrder;
+exports.getAccountInfo = getAccountInfo;
+exports.getUSDAccountBalance = getUSDAccountBalance;
+exports.getAssetBalance = getAssetBalance;
+exports.getOrderStatus = getOrderStatus;
+exports.getOpenOrders = getOpenOrders;
+exports.getAllOrders = getAllOrders;
+exports.getOrderList = getOrderList;
+exports.getAllOrderLists = getAllOrderLists;
+exports.cancelOrder = cancelOrder;
+exports.cancelAllOpenOrders = cancelAllOpenOrders;
+exports.cancelAllOpenOrdersForSymbol = cancelAllOpenOrdersForSymbol;
 const dotenv_1 = __importDefault(require("dotenv"));
 const crypto_1 = __importDefault(require("crypto"));
 const uuid_1 = require("uuid");
@@ -63,9 +74,8 @@ function placeOrder(orderParams) {
         }
     });
 }
-exports.placeOrder = placeOrder;
-function getAccountInfo(omitZeroBalances = false, recvWindow) {
-    return __awaiter(this, void 0, void 0, function* () {
+function getAccountInfo() {
+    return __awaiter(this, arguments, void 0, function* (omitZeroBalances = false, recvWindow) {
         try {
             const timestamp = Date.now();
             const params = {
@@ -107,7 +117,6 @@ function getAccountInfo(omitZeroBalances = false, recvWindow) {
         }
     });
 }
-exports.getAccountInfo = getAccountInfo;
 // Function to query specific order status
 function getOrderStatus(orderParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -156,7 +165,6 @@ function getOrderStatus(orderParams) {
         }
     });
 }
-exports.getOrderStatus = getOrderStatus;
 // Function to get all open orders
 function getOpenOrders(symbol, recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -201,7 +209,6 @@ function getOpenOrders(symbol, recvWindow) {
         }
     });
 }
-exports.getOpenOrders = getOpenOrders;
 // Function to cancel an order
 function cancelOrder(orderParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -256,7 +263,6 @@ function cancelOrder(orderParams) {
         }
     });
 }
-exports.cancelOrder = cancelOrder;
 // Function to cancel all open orders for a symbol or all symbols
 function cancelAllOpenOrders(symbol, recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -309,14 +315,12 @@ function cancelAllOpenOrders(symbol, recvWindow) {
         }
     });
 }
-exports.cancelAllOpenOrders = cancelAllOpenOrders;
 // Function to cancel all open orders for a specific symbol only
 function cancelAllOpenOrdersForSymbol(symbol, recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
         return yield cancelAllOpenOrders(symbol, recvWindow);
     });
 }
-exports.cancelAllOpenOrdersForSymbol = cancelAllOpenOrdersForSymbol;
 // ...existing code...
 // Function to get all orders (active, canceled, or filled)
 function getAllOrders(orderParams) {
@@ -366,7 +370,6 @@ function getAllOrders(orderParams) {
         }
     });
 }
-exports.getAllOrders = getAllOrders;
 // Function to query a specific order list
 function getOrderList(orderListParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -412,7 +415,6 @@ function getOrderList(orderListParams) {
         }
     });
 }
-exports.getOrderList = getOrderList;
 // Function to get all order lists
 function getAllOrderLists(orderListParams) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -463,7 +465,6 @@ function getAllOrderLists(orderListParams) {
         }
     });
 }
-exports.getAllOrderLists = getAllOrderLists;
 // ...existing code...
 // Function to get USD account balance specifically
 function getUSDAccountBalance(recvWindow) {
@@ -525,7 +526,6 @@ function getUSDAccountBalance(recvWindow) {
         }
     });
 }
-exports.getUSDAccountBalance = getUSDAccountBalance;
 // Function to get specific asset balance
 function getAssetBalance(asset, recvWindow) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -559,4 +559,3 @@ function getAssetBalance(asset, recvWindow) {
         }
     });
 }
-exports.getAssetBalance = getAssetBalance;
