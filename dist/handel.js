@@ -9,6 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.convertTradingViewToBinance = convertTradingViewToBinance;
 exports.handleFuturesTradingAlert = handleFuturesTradingAlert;
 exports.closeFuturesPosition = closeFuturesPosition;
 exports.forceCloseAllPositions = forceCloseAllPositions;
@@ -17,19 +18,153 @@ exports.getFuturesPosition = getFuturesPosition;
 exports.syncFuturesPositions = syncFuturesPositions;
 exports.handleTradingAlert = handleTradingAlert;
 const futures_js_1 = require("./futures.js");
+// TradingView to Binance symbol mappings
+const TRADINGVIEW_TO_BINANCE_MAP = {
+    // Quarterly contracts - convert to perpetual USDT-M
+    LINKUSDM2025: "LINKUSDT",
+    ETHUSDM2025: "ETHUSDT",
+    ETHUSDT27M2025: "ETHUSDT",
+    SOLUSDM2025: "SOLUSDT",
+    BNBUSDM2025: "BNBUSDT",
+    LTCUSDM2025: "LTCUSDT",
+    XRPUSDM2025: "XRPUSDT",
+    // Common TradingView format variations
+    LINKUSD_250627: "LINKUSDT",
+    ETHUSD_250627: "ETHUSDT",
+    BTCUSD_250627: "BTCUSDT",
+    SOLUSD_250627: "SOLUSDT",
+    ADAUSD_250627: "ADAUSDT",
+    BNBUSD_250627: "BNBUSDT",
+    // Perpetual contract variations
+    LINKUSD_PERP: "LINKUSDT",
+    ETHUSD_PERP: "ETHUSDT",
+    BTCUSD_PERP: "BTCUSDT",
+    SOLUSD_PERP: "SOLUSDT",
+    ADAUSD_PERP: "ADAUSDT",
+    BNBUSD_PERP: "BNBUSDT",
+    // Other common variations
+    ETHUSDC: "ETHUSDT",
+    BTCUSDC: "BTCUSDT",
+    LINKUSDC: "LINKUSDT",
+};
+// Base asset extraction patterns
+const BASE_ASSET_PATTERNS = [
+    /^([A-Z]+)USDM\d{4}$/, // LINKUSDM2025 -> LINK
+    /^([A-Z]+)USDT\d+M\d{4}$/, // ETHUSDT27M2025 -> ETH
+    /^([A-Z]+)USD_\d{6}$/, // LINKUSD_250627 -> LINK
+    /^([A-Z]+)USD_PERP$/, // LINKUSD_PERP -> LINK
+    /^([A-Z]+)USDC$/, // ETHUSDC -> ETH
+];
+/**
+ * Converts TradingView symbol to proper Binance futures symbol
+ */
+function convertTradingViewToBinance(symbol) {
+    const originalSymbol = symbol.toUpperCase().trim();
+    try {
+        // Direct mapping lookup
+        if (TRADINGVIEW_TO_BINANCE_MAP[originalSymbol]) {
+            return {
+                originalSymbol,
+                binanceSymbol: TRADINGVIEW_TO_BINANCE_MAP[originalSymbol],
+                contractType: "USDT-M",
+                isConverted: true,
+            };
+        }
+        // If already a valid USDT-M symbol, return as-is
+        if (originalSymbol.endsWith("USDT") && !originalSymbol.includes("_")) {
+            return {
+                originalSymbol,
+                binanceSymbol: originalSymbol,
+                contractType: "USDT-M",
+                isConverted: false,
+            };
+        }
+        // Try pattern-based conversion
+        for (const pattern of BASE_ASSET_PATTERNS) {
+            const match = originalSymbol.match(pattern);
+            if (match && match[1]) {
+                const baseAsset = match[1];
+                const binanceSymbol = `${baseAsset}USDT`;
+                return {
+                    originalSymbol,
+                    binanceSymbol,
+                    contractType: "USDT-M",
+                    isConverted: true,
+                };
+            }
+        }
+        // Special case for COIN-M perpetuals
+        if (originalSymbol.includes("USD_PERP") ||
+            originalSymbol.endsWith("USD_PERP")) {
+            const baseAsset = originalSymbol
+                .replace("USD_PERP", "")
+                .replace("_PERP", "");
+            return {
+                originalSymbol,
+                binanceSymbol: `${baseAsset}USDT`,
+                contractType: "USDT-M",
+                isConverted: true,
+            };
+        }
+        // If no conversion found, return error
+        return {
+            originalSymbol,
+            binanceSymbol: originalSymbol,
+            contractType: "USDT-M",
+            isConverted: false,
+            error: `No conversion rule found for symbol: ${originalSymbol}`,
+        };
+    }
+    catch (error) {
+        return {
+            originalSymbol,
+            binanceSymbol: originalSymbol,
+            contractType: "USDT-M",
+            isConverted: false,
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
 // In-memory position tracking for futures
 const activeFuturesPositions = new Map();
-// Function to detect contract type
+// Fixed function to detect contract type
 function getContractType(symbol) {
-    if (symbol.includes("USDM") ||
-        (symbol.includes("USD") && symbol.match(/\d{3}$/))) {
+    const upperSymbol = symbol.toUpperCase();
+    // COIN-M patterns: ends with USD_PERP, USD_YYMMDD, or just USD (legacy)
+    if (upperSymbol.includes("USD_") ||
+        upperSymbol.endsWith("USD_PERP") ||
+        (upperSymbol.includes("USD") &&
+            !upperSymbol.includes("USDT") &&
+            upperSymbol.match(/_\d{6}$/))) {
         return "COIN-M";
     }
+    // USDT-M patterns: ends with USDT or contains USDT
+    if (upperSymbol.includes("USDT")) {
+        return "USDT-M";
+    }
+    // Default to USDT-M for safety (most common)
+    console.log(`⚠️ Unknown symbol pattern: ${symbol}, defaulting to USDT-M`);
     return "USDT-M";
 }
-// Main handler function for futures trading alerts
+// ...existing code...
+// Remove the old validateAndFixSymbol function and replace with this:
+function validateAndFixSymbol(symbol) {
+    const conversionResult = convertTradingViewToBinance(symbol);
+    if (conversionResult.isConverted) {
+        console.log(`🔄 Converting "${conversionResult.originalSymbol}" to "${conversionResult.binanceSymbol}"`);
+    }
+    if (conversionResult.error) {
+        console.warn(`⚠️ Symbol conversion warning: ${conversionResult.error}`);
+    }
+    return {
+        symbol: conversionResult.binanceSymbol,
+        contractType: conversionResult.contractType,
+    };
+}
+// Main handler function for futures trading alerts - UPDATED
 function handleFuturesTradingAlert(alertJson) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         try {
             console.log("🚀 Received futures alert:", alertJson);
             // Parse the JSON alert
@@ -38,9 +173,26 @@ function handleFuturesTradingAlert(alertJson) {
             if (!alert.symbol || !alert.side || !alert.trade) {
                 throw new Error("Invalid alert: missing required fields (symbol, side, trade)");
             }
-            // Auto-detect contract type
-            const contractType = getContractType(alert.symbol);
+            // Use the comprehensive conversion function
+            const conversionResult = convertTradingViewToBinance(alert.symbol);
+            // Log conversion details
+            if (conversionResult.isConverted) {
+                console.log(`🔄 Symbol converted: "${conversionResult.originalSymbol}" → "${conversionResult.binanceSymbol}"`);
+            }
+            else {
+                console.log(`✅ Symbol "${conversionResult.binanceSymbol}" is valid - no conversion needed`);
+            }
+            if (conversionResult.error) {
+                console.warn(`⚠️ Symbol conversion warning: ${conversionResult.error}`);
+            }
+            // Update alert with converted symbol
+            alert.symbol = conversionResult.binanceSymbol;
+            const contractType = conversionResult.contractType;
             console.log(`📊 Processing ${contractType} ${alert.trade} order: ${alert.side} ${alert.symbol}`);
+            console.log(`   Original symbol: ${conversionResult.originalSymbol}`);
+            console.log(`   Binance symbol: ${conversionResult.binanceSymbol}`);
+            console.log(`   Contract type: ${contractType}`);
+            console.log(`   Converted: ${conversionResult.isConverted}`);
             // Route based on trade type
             if (alert.trade === "OPEN") {
                 return yield handleOpenFuturesPosition(alert);
@@ -54,16 +206,33 @@ function handleFuturesTradingAlert(alertJson) {
         }
         catch (error) {
             console.error("❌ Error handling futures trading alert:", error);
+            // Enhanced error reporting with symbol info
+            if (error instanceof Error && error.message.includes("symbol")) {
+                const originalSymbol = (_a = JSON.parse(alertJson)) === null || _a === void 0 ? void 0 : _a.symbol;
+                if (originalSymbol) {
+                    const testConversion = convertTradingViewToBinance(originalSymbol);
+                    console.error(`🔍 Symbol conversion debug for "${originalSymbol}":`);
+                    console.error(`   Binance symbol: ${testConversion.binanceSymbol}`);
+                    console.error(`   Contract type: ${testConversion.contractType}`);
+                    console.error(`   Is converted: ${testConversion.isConverted}`);
+                    console.error(`   Error: ${testConversion.error || "None"}`);
+                }
+            }
             throw error;
         }
     });
 }
-// Handle opening new futures positions with risk management
+// Update other functions to use the converter as well
 function handleOpenFuturesPosition(alert) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d, _e, _f, _g;
         try {
             const { symbol, side, leverage = 50 } = alert;
+            // Double-check symbol conversion for safety
+            const conversionCheck = convertTradingViewToBinance(symbol);
+            if (conversionCheck.error) {
+                console.warn(`⚠️ Symbol validation warning: ${conversionCheck.error}`);
+            }
             const currentPosition = activeFuturesPositions.get(symbol);
             // If position already exists, close it first
             if (currentPosition) {
@@ -83,7 +252,8 @@ function handleOpenFuturesPosition(alert) {
                 console.log(`📊 Using manual quantity: ${alert.quantity}`);
                 // Set leverage first
                 yield (0, futures_js_1.changeFuturesLeverage)(symbol, leverage);
-                const contractType = getContractType(symbol);
+                // Use the contract type from conversion result
+                const contractType = conversionCheck.contractType;
                 const orderParams = Object.assign(Object.assign({ symbol: symbol, side: side, type: (alert.type || "MARKET"), quantity: alert.quantity }, (alert.price ? { price: alert.price } : {})), { newOrderRespType: "RESULT" });
                 if (contractType === "COIN-M") {
                     orderResult = yield (0, futures_js_1.placeCoinMFuturesOrder)(orderParams);
@@ -129,14 +299,14 @@ function handleOpenFuturesPosition(alert) {
                 orderResult = yield (0, futures_js_1.placeSmartRiskOrder)(symbol, side, riskConfig);
             }
             console.log("✅ Futures entry order placed:", orderResult);
-            // Store new position
+            // Store new position - use converted contract type
             const newPosition = {
                 symbol: symbol,
                 side: side === "BUY" ? "LONG" : "SHORT",
                 quantity: parseFloat(((_a = orderResult.orderDetails) === null || _a === void 0 ? void 0 : _a.quantity) || alert.quantity || "0"),
                 entryPrice: ((_b = orderResult.orderDetails) === null || _b === void 0 ? void 0 : _b.price) || parseFloat(orderResult.price || "0"),
                 leverage: leverage,
-                contractType: getContractType(symbol),
+                contractType: conversionCheck.contractType, // Use from conversion
                 orderId: ((_d = (_c = orderResult.orders) === null || _c === void 0 ? void 0 : _c.mainOrder) === null || _d === void 0 ? void 0 : _d.orderId) || orderResult.orderId,
                 stopLossOrderId: ((_f = (_e = orderResult.orders) === null || _e === void 0 ? void 0 : _e.stopLossOrder) === null || _f === void 0 ? void 0 : _f.orderId) ||
                     ((_g = orderResult.stopLossOrder) === null || _g === void 0 ? void 0 : _g.orderId),
@@ -149,6 +319,11 @@ function handleOpenFuturesPosition(alert) {
                 action: "OPEN_POSITION",
                 position: newPosition,
                 orderResult: orderResult,
+                symbolConversion: {
+                    original: conversionCheck.originalSymbol,
+                    converted: conversionCheck.binanceSymbol,
+                    wasConverted: conversionCheck.isConverted,
+                },
             };
         }
         catch (error) {
@@ -157,6 +332,7 @@ function handleOpenFuturesPosition(alert) {
         }
     });
 }
+// ...existing code...
 // Updated function to handle closing futures positions
 function handleCloseFuturesPosition(alert) {
     return __awaiter(this, void 0, void 0, function* () {
